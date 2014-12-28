@@ -18,38 +18,40 @@ def calculate_normalizer(ts):
 
     return divisor
 
-# load timeseries data
-mean_run = nib.load('mean_RUN_bpass_smoothHead.nii.gz')
-# load anatomical ROIs resampled to match data
-mask = nib.load('mask_LGN_TRN_resamp_split.nii.gz')
-# load regions that modulate with retinotopy (q[FDR] = 0.05)
-stat = nib.load('mask_stats_FFT_single_multitaper_LGNTRN_mean_RUN_allpass_smoothHeadLGNTRN.nii.gz')
+def load_nifti(filename, returns_dims=False):
+    """
+    Loads a nifti file, returns the data matrix reshaped to 2D and it's original
+    dimensions.
 
-# reshape data to nvox x ntrs
-dims = mean_run.shape
+    If returns_dims is True, we also return the 3D voxel dimensions, the number
+    of voxels, and the number of TRs.
+    """
+    data = nib.load(filename)
 
-mean_run = mean_run.get_data()
-mask = mask.get_data()
-stat = stat.get_data()
+    # retrieve the dimensions
+    dims = data.shape
+    nvox = dims[0]*dims[1]*dims[2]
+    ntrs = dims[3]
 
-nvox = dims[0]*dims[1]*dims[2]
-ntrs = dims[3]
+    # retrieve the matrix
+    data = data.get_data()
+    data = np.reshape(data, (nvox, ntrs))
 
-mean_run = np.reshape(mean_run, (nvox, ntrs))
-mask = np.reshape(mask, (nvox, 1))
-stat = np.reshape(stat, (nvox, 1))
+    if returns_dims == True:
+        return data, dims, nvox, ntrs
+    else:
+        return data
 
-# set the ROIs from the mask: 
-# 1 = rlgn, 
-# 2 = llgn, 
-# 3 = rvtrn, 
-# 4 = lvtrn, 
-# 5 = rdtrn, 
-# 6 = ldtrn
-
+# mask ROIs: 1 = rlgn, 2 = llgn, 3 = rvtrn, 4 = lvtrn, 5 = rdtrn, 6 = ldtrn
 rois = [1,2,4]
-
 n_samps = 20
+outnames = ['01_rlgn-ts', '02_llgn-ts', '03_lvtrn-ts']
+
+
+# load timeseries data, anatomical ROIs, and statmask from retino (q[FDR]=0.05)
+mean_run = load_nifti('mean_RUN_bpass_smoothHead.nii.gz')
+mask = load_nifti('mask_LGN_TRN_resamp_split.nii.gz')
+stat = load_nifti('mask_stats_FFT_single_multitaper_LGNTRN_mean_RUN_allpass_smoothHeadLGNTRN.nii.gz')
 
 # plot 10 time series from each ROI
 for i, val in enumerate(rois):
@@ -71,7 +73,7 @@ for i, val in enumerate(rois):
 
     plt.suptitle(str(val))
     
-    plt.savefig(str(val) + '.svg')
+    plt.savefig(outnames[i] + '.svg')
     plt.close()
 
     # if this is the first one, init the out_ts matrix
@@ -83,18 +85,17 @@ for i, val in enumerate(rois):
 
 cmat = np.corrcoef(out_ts)
 
-# plot full graph
+# plot full graph and thresholded graph
 plt.imshow(cmat, vmin=-1, vmax=1, cmap=plt.cm.RdBu_r, interpolation='nearest')
 plt.axis('off')
-plt.savefig('0_lvtrn_mat.svg')
-
-# plot thresholded greaph
-cmat[cmat <= 0] = 0
+plt.savefig('04_full-mat.svg')
 plt.close()
+
+cmat[cmat <= 0] = 0
 plt.imshow(cmat, vmin=-1, vmax=1, cmap=plt.cm.RdBu_r, interpolation='nearest')
 plt.axis('off')
-plt.savefig('0_lvtrn_thresholded-mat.svg')
+plt.savefig('04_pos-mat.svg')
 
 # turn thresholded matrix into a networkx graph object 
 g = nx.Graph(cmat)
-nx.write_gexf(g, '0_lvtrn_thresholded-mat.gexf')
+nx.write_gexf(g, '05_pos-mat.gexf')
