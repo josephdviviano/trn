@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import numpy as np
-import scipy as sp
 import matplotlib.pyplot as plt
 import nibabel as nib
 import networkx as nx
@@ -53,13 +52,14 @@ mean_run = load_nifti('mean_RUN_bpass_smoothHead.nii.gz')
 mask = load_nifti('mask_LGN_TRN_resamp_split.nii.gz')
 stat = load_nifti('mask_stats_FFT_single_multitaper_LGNTRN_mean_RUN_allpass_smoothHeadLGNTRN.nii.gz')
 
-# plot 10 time series from each ROI
+# plot n time series from each ROI
 for i, val in enumerate(rois):
+    
     # find the values within each ROI that are statistically significant
     idx = np.intersect1d(np.where(mask == val)[0], np.where(stat > 0)[0])
 
     plt.figure(num=None, figsize=(2, 8))
-    # take the first 10, arbitrary
+    # take the first n, arbitrary
     for n in range(n_samps):
     
         # calculate normalizer (min/max)
@@ -83,6 +83,7 @@ for i, val in enumerate(rois):
     else:
         out_ts = np.vstack((out_ts, mean_run[idx[:n_samps], :]))
 
+# generate correlation matrix
 cmat = np.corrcoef(out_ts)
 
 # plot full graph and thresholded graph
@@ -98,4 +99,16 @@ plt.savefig('04_pos-mat.svg')
 
 # turn thresholded matrix into a networkx graph object 
 g = nx.Graph(cmat)
+
+# number the nodes by ROI
+for n in g.nodes():
+    if n < n_samps: 
+        g.node[n]['label'] = 1
+
+    elif n >= n_samps and n < n_samps*2:
+        g.node[n]['label'] = 2
+
+    else:
+        g.node[n]['label'] = 3
+
 nx.write_gexf(g, '05_pos-mat.gexf')
