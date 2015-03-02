@@ -23,7 +23,7 @@ opt.rest = 0;           % blank period at end of stimulus in secs
 
 % flicker frequencies
 opt.HzProjector = 60;           % refresh rate of projector (theoretical)
-opt.HzList = [1,2,3,4,5,10,12,15,30,60]; % frequencies to test
+opt.HzList = [2,5,10,15,20,24,30,40,60,120]; % frequencies to test
 
 % eye tracker network settings
 ivx.host = '192.168.0.1';
