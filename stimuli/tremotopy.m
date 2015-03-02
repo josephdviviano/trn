@@ -22,7 +22,7 @@ opt.rewind = 10;         % rewind of flickulus in secs (allow for steady state)
 opt.rest = 0;           % blank period at end of stimulus in secs
 
 % flicker frequencies
-opt.HzProjector = 60;           % refresh rate of projector (theoretical)
+opt.HzProjector = 120;           % refresh rate of projector (theoretical)
 opt.HzList = [2,5,10,15,20,24,30,40,60,120]; % frequencies to test
 
 % eye tracker network settings
