@@ -1,11 +1,10 @@
 %% Polar Angle Tremotopy for PTB 3 %% Makes Eyes Bleed and Brains Sing %%%%%%%%%
 % Retinotopy - K Schneider 12/13/05, KbWait(-1) and KbCheck(-1) 2/3/10
-% Flicker    - J Viviano   29/11/12 w/ frame-based timing, rewind, rest,
-%                                       
+% Flicker    - J Viviano   29/11/12 w/ frame-based timing
 
 try
-clc; clear all;
 
+clc;
 AssertOpenGL;            % Check OpenGL is avaliable
 Priority = 100;          % Set High Priority
 KbName('UnifyKeyNames'); % Portable keyboard handling (win / linux / OSX)
@@ -13,27 +12,18 @@ ivx=iViewXInitDefaults;  % Init eyetracker
 
 %% Paramaters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % timing
-opt.RF_period = 30;	     % period (sec) for rotating hemifield (cosine)
-opt.FF_period = 40;      % period (sec) for flicker rate (staircase)
-opt.SF_period = 1;       % period (sec) for spatial frequency (cosine)
-
-opt.RF_cycles = 8;      % number of cycles for rotating hemifield
-opt.FF_cycles = 6;
-opt.SF_cycles = 1;       
+opt.RF_period = 21;	     % period (sec) for rotating hemifield (cosine)
+opt.FF_period = 30;      % period (sec) for flicker rate (staircase)
+    
+opt.RF_cycles = 10;      % number of cycles for rotating hemifield
+opt.FF_cycles = 7;
 
 opt.rewind = 10;         % rewind of flickulus in secs (allow for steady state)
-opt.rest = 30;           % blank period at end of stimulus in secs
+opt.rest = 0;           % blank period at end of stimulus in secs
 
 % flicker frequencies
-opt.HzProjector = 120;   % refresh rate of projector (theoretical)
-opt.HzList = [1,5,10,15,20,24,30,40,60,120]; % frequencies to test
-
-% spatial frequencies
-opt.screenW = 25;      % screen width (cm)
-opt.screenD = 38;      % screen distance (cm)
-opt.SF_min = 2;        % minimum spatial frequency (cpd)
-opt.SF_max = 2;        % maximum spatial frequency (cpd)
-opt.SF_log = 1;        % 0 = linear modulation, 1 = log modulation 
+opt.HzProjector = 60;           % refresh rate of projector (theoretical)
+opt.HzList = [1,2,3,4,5,10,12,15,30,60]; % frequencies to test
 
 % eye tracker network settings
 ivx.host = '192.168.0.1';
@@ -44,11 +34,12 @@ ivx.localport = 5555;
 % misc options
 opt.whichScreen = 0;     % normally 0 for the primary display
 opt.shrinkFactor = 6;    % scales the image for unusual projection situations
-opt.print = 0;
+opt.print = 1;           % print a rendering of the stimulus (.png)
 
 % NB: All periods should not divide evenly into eachother, but should still 
 %     allow for an interger number of cycles in the full scan time. 
-
+% NB: iViex network settings start on line 185
+  
 %% Check Settings for Human Errors %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % ensure user defined the right number of valid frequencies for the projector
 Hz.all = 1:opt.HzProjector;
@@ -76,7 +67,7 @@ end
 % Define escape fxn and open Screen
 esckey = KbName('Escape');
 [w, r] = Screen('OpenWindow', opt.whichScreen, 0, [], 32, 2, [], [], 1);
-rect = round(r/opt.shrinkFactor) ;
+rect = r/opt.shrinkFactor;
 Screen('BlendFunction', w, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 HideCursor;
 
@@ -144,10 +135,14 @@ vec.flick(length(vec.rewind)+1:length(vec.rewind)+length(vec.flip)) = vec.flip;
 xc = r(3)/2;
 yc = r(4)/2;
 
-% convert pixels per degree into pixels per check
-pixPer.degree = pi /180 * rect(3) * opt.screenD / opt.screenW;
-pixPer.checkMin = pixPer.degree/opt.SF_min/2;
-pixPer.checkMax = pixPer.degree/opt.SF_max/2;
+% b/w circle pairs (8) / angular segments (24) must be integral
+if opt.shrinkFactor > 1
+    checkerCycles.r = 8/2;
+    checkerCycles.t = 24/2;
+else
+    checkerCycles.r = 8;
+    checkerCycles.t = 24;
+end	
 
 % make flickulus
 index.white=WhiteIndex(w);
@@ -158,29 +153,33 @@ index.bg = (index.white + index.black) / 2;
 
 xysize = rect(4);
 s = xysize/sqrt(2);
-checks = repmat([1 0; 0 1], xysize/2) * (index.hi - index.lo) + index.lo;
-[x,y] = meshgrid(0.5:rect(3)-0.5, 0.5:rect(4)-0.5);
+xylim = 2*pi*checkerCycles.r;
 
-% (:,;,1) = B/W, (:,:,2) = alpha
-circleStim(:,:,1) = repmat(index.bg, rect(4), rect(3));
-circleStim(:,:,2) = index.white * ((x-xc/opt.shrinkFactor).^2 + (y-yc/opt.shrinkFactor).^2 >= (xysize/2)^2);
+[x,y] = meshgrid(-xylim:2*xylim/(xysize-1):xylim, ...
+                 -xylim:2*xylim/(xysize-1):xylim);
+at = atan2(y,x);
+
+checks = ((1+sign(sin(at*checkerCycles.t)+eps) .* sign(sin(sqrt(x.^2+y.^2))))/2) ...
+       * (index.hi-index.lo) + index.lo;
+
+circle = x.^2 + y.^2 <= xylim^2;
+checks = circle .* checks + index.bg * ~circle;
 
 % Create checkerboard / reversed contrast
-t(1) = Screen('MakeTexture', w, checks);                % phase
-t(2) = Screen('MakeTexture', w, index.white - checks);  % counterphase
-t(3) = Screen('MakeTexture', w, circleStim);            % alpha
+t(1) = Screen('MakeTexture', w, checks);               % phase
+t(2) = Screen('MakeTexture', w, index.white - checks); % counterphase
 
 % Create Fixation Point
 Screen('FillRect', w, index.black);
 Screen('FillRect', w, index.bg, [xc-rect(3)/2 yc-rect(4)/2 ...
                                  xc+rect(3)/2 yc+rect(4)/2]);
-if opt.shrinkFactor <= 2;
+%if opt.shrinkFactor <= 2;
     Screen('FillRect', w, index.black, [xc-3 yc-3 xc+3 yc+3]);
     Screen('FillRect', w, index.white, [xc-2 yc-2 xc+2 yc+2]);
     Screen('FillRect', w, index.black, [xc-1 yc-1 xc+1 yc+1]);
-else
-    Screen('FillRect', w, [255,0,0], [xc-1 yc-1 xc+1 yc+1]);
-end
+%else
+%    Screen('FillRect', w, [255,0,0], [xc-1 yc-1 xc+1 yc+1]);
+%end
 
 % Draw Text & Wait for Keypress
 txt = 'Fixate';
@@ -196,7 +195,7 @@ Screen('Flip', w);
 
 KbWait(-1);
 
-%% Animation Loops: Now With Eye Tracking %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Animation Loop: Now With Eye Tracking %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Check connection with the iView, exit program if this fails
 %if iViewX('initialize', ivx)~=1;
 %	return;
@@ -216,34 +215,16 @@ theFrame = 0;
 % animation loop
 while time.now <= opt.RF_period * opt.RF_cycles;  
     
-    % spatial frequency
-    if opt.SF_log == 1;
-        pixPer.check = round((pixPer.checkMin/pixPer.checkMax)           ...
-                     ^ (1 + (cos(2*pi*floor(time.now)/opt.SF_period))/2) ...
-                     * pixPer.checkMax);
-    else
-        pixPer.check = round((pixPer.checkMin-pixPer.checkMax)           ...
-                     * (1 + (cos(2*pi*floor(time.now)/opt.SF_period))/2) ...
-                     + pixPer.checkMax);
-    end 
-    
     % draw the next frame's full field checkerboard
     if theFrame ~= length(vec.flick);
         theFrame = theFrame + 1;
     end
     
     flick = vec.flick(theFrame);
-    
-    nchecks = ceil(xysize/pixPer.check);
-    destsize = nchecks*pixPer.check;
-    destrect = [(r(3)/2-destsize), (r(4)/2-destsize), ...
-                (r(3)/2+destsize), (r(4)/2+destsize)];
-    Screen('DrawTexture', w, t(flick), ...
-                          [0 0 1 1]*nchecks, destrect, 0, 0, [], [255 255 255]);
-         
-    % draw circular boundary (needs alpha blending)
-    Screen('DrawTexture', w, t(3));
-    
+    Screen('FillRect', w, index.bg, [xc-rect(3)/2 yc-rect(4)/2 ...
+                                     xc+rect(3)/2 yc+rect(4)/2]); 
+    Screen('DrawTexture', w, t(flick));
+     
     % draw rectangular mask for rotation
     theta = mod(time.now, opt.RF_period)/opt.RF_period*2*pi;
     st = sin(theta);
@@ -257,13 +238,13 @@ while time.now <= opt.RF_period * opt.RF_cycles;
     Screen('FillRect', w, index.black, [r(1) r(2) r(3) yc-rect(4)/2]);
     
     % draw fixation point
-    if opt.shrinkFactor <= 2;
+    %if opt.shrinkFactor <= 2;
         Screen('FillRect', w, index.black, [xc-3 yc-3 xc+3 yc+3]);
         Screen('FillRect', w, index.white, [xc-2 yc-2 xc+2 yc+2]);
         Screen('FillRect', w, index.black, [xc-1 yc-1 xc+1 yc+1]);
-    else
-        Screen('FillRect', w, [255,0,0], [xc-1 yc-1 xc+1 yc+1]);
-    end
+    %else
+    %    Screen('FillRect', w, [255,0,0], [xc-1 yc-1 xc+1 yc+1]);
+    %end
     
     % abort if keypress
     [kdown,secs,keyCode] = KbCheck(-1);
@@ -277,6 +258,13 @@ while time.now <= opt.RF_period * opt.RF_cycles;
     if missCheck > 0; 
         theFrame = theFrame + 1; 
     end
+    
+    % write out an image if in print mode
+    if opt.print == 1;
+        img = Screen('GetImage', w, [xc-rect(3)/2 yc-rect(4)/2 ...
+                                     xc+rect(3)/2 yc+rect(4)/2]);
+        imwrite(img, 'C:\Users\Paperbag\Desktop\stim.png')
+    end
 end
 
 % rest period loop
@@ -286,15 +274,14 @@ while time.now <= opt.RF_period * opt.RF_cycles + opt.rest;
     Screen('FillRect', w, index.black);
     Screen('FillRect', w, index.bg, [xc-rect(3)/2 yc-rect(4)/2 ...
                                      xc+rect(3)/2 yc+rect(4)/2]);
-    
     % draw fixation point
-    if opt.shrinkFactor <= 2;
+    %if opt.shrinkFactor <= 2;
         Screen('FillRect', w, index.black, [xc-3 yc-3 xc+3 yc+3]);
         Screen('FillRect', w, index.white, [xc-2 yc-2 xc+2 yc+2]);
         Screen('FillRect', w, index.black, [xc-1 yc-1 xc+1 yc+1]);
-    else
-        Screen('FillRect', w, [255,0,0], [xc-1 yc-1 xc+1 yc+1]);
-    end
+    %else
+    %    Screen('FillRect', w, [255,0,0], [xc-1 yc-1 xc+1 yc+1]);
+    %end
     
     % abort if keypress
     [kdown,secs,keyCode] = KbCheck(-1);
@@ -303,6 +290,7 @@ while time.now <= opt.RF_period * opt.RF_cycles + opt.rest;
     % execute a flip
     [time.VBL, time.flick, time.stamp, missCheck] = Screen('Flip', w);
     time.now = time.stamp - time.start - opt.rewind;
+    
 end
 
 iViewX('stoprecording', ivx);
@@ -319,7 +307,7 @@ Screen('FillRect', w, index.black, [r(1) r(2) xc-rect(3)/2 r(4)]);
 Screen('FillRect', w, index.black, [r(1) r(2) r(3) yc-rect(4)/2]);
 
 % draw Text
-txt = 'Thank you, run complete';
+txt = 'Thank you';
 if opt.shrinkFactor <= 2;
     Screen('TextSize', w, 24);
 else
@@ -334,20 +322,6 @@ KbWait(-1);
 
 ShowCursor;
 Screen('CloseAll');
-
-% Print figure of stimulus
-if opt.print == 1;
-    fig.freq = repmat(vec.freq, 1, opt.FF_cycles);
-    fig.time = 1:length(fig.freq);
-    fig.img = plot(fig.time, fig.freq);
-    hold all
-    fig.img = plot(fig.time, max(fig.freq)/2*cos(2*pi*fig.time/opt.RF_period)+max(fig.freq)/2);
-    axis([1 length(fig.freq) 0 max(fig.freq)])
-    saveas(fig_STIM,                                                         ...
-          ['fig_STIM_FF_' int2str(FFcycles) '_RF_' int2str(RFcycles) '.jpg'],...
-          'jpeg');
-    %clf
-end
 
 catch
 ShowCursor;
