@@ -3,7 +3,7 @@ Interhemispheric Interactions of the Human Thalamic Reticular Nucleus: Journal O
 
 ![Interhemispheric Interactions of the Human Thalamic Reticular Nucleus](cover/2015jneurosci-1600x800.jpg "Interhemispheric Interactions of the Human Thalamic Reticular Nucleus")
 
-This repository contains the code required to replicate the methods I used & developed for this papers. I wrote all of it a few years ago and I can't garuntee it will be hassle-free, so please contact me with any issues. I've been meaning to integrate some of these methods into NiNet for a while, so watch that space, but in the meantime, this repository should be of use if you are interested in these methods.
+This repository contains the code required to replicate the methods I used & developed for this paper. I wrote all of it a few years ago and I can't garuntee it will be hassle-free. In gerneral it would be better to use the implementation in [epitome](https://github.com/josephdviviano/epitome), which contains both the pre-processing and analysis methods used here (to a very close approximation).
 
 If you find these methods helpful, please be sure to [reference our paper](http://www.jneurosci.org/content/35/5/2026.short).
 
